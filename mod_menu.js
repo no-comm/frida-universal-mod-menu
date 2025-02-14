@@ -288,6 +288,7 @@ class Menu {
                     const parent = viewToRemove.getParent();
                     const parentViewGroup = Java.cast(parent, Java.use("android.view.ViewGroup"));
                     parentViewGroup.removeView(viewToRemove);
+                    console.log("Destroyed")
                 }
             }
         })
@@ -309,6 +310,7 @@ class Menu {
         button.setPadding(padding, padding, 0, padding)
         this.#menuScrollLayout.addView(button)
         this.#createDestroyClickEvent(button);
+        
     }
 
     #createRadioButtonClickEvent(id, optionView, group, callbacks) {
@@ -318,14 +320,6 @@ class Menu {
             implements: [classLoader.View_OnClickListener],
             methods: {
                 onClick(p1) {
-                    group.forEach(button => {
-                        button.setBackgroundColor(classLoader.Color.parseColor("#c2bebe"));
-                        button.setTextColor(classLoader.Color.parseColor("#75757B"));
-                    });
-    
-                    p1.setBackgroundColor(classLoader.Color.parseColor("#64ff59"));
-                    p1.setTextColor(classLoader.Color.parseColor("#ffffff"));
-    
                     callbacks.onClick();
                 }
             }
@@ -345,7 +339,7 @@ class Menu {
         radioButton.setLayoutParams(layoutParams);
         radioButton.setPadding(padding, padding, 0, padding);
     
-        group.addView(radioButton, 0, layoutParams);
+        group.addView(radioButton, -1, layoutParams);
     
         this.#createRadioButtonClickEvent(id, radioButton, group, callbacks);
     }
@@ -531,7 +525,11 @@ class Menu {
                         callbacks.onItemSelected(position);
                     }
                 },
-                onNothingSelected(parent) {}
+                onNothingSelected(parent) {
+                    if (callbacks && callbacks.onNothingSelected) {
+                        callbacks.onNothingSelected();
+                    }
+                }
             }
         });
     
@@ -569,6 +567,7 @@ class Menu {
         const menuLayout = this.#menuLayout
         const menuStart = this.#menuStart
         const classLoader = this.#classLoader
+        const activity = this.#activity
         let initialX = 0
         let initialY = 0
         let isMove = false
@@ -600,8 +599,25 @@ class Menu {
                             }
                             break
                         case classLoader.MotionEvent.ACTION_MOVE.value:
-                            view.setX(event.getRawX() + initialX)
-                            view.setY(event.getRawY() + initialY)
+                            let newX = event.getRawX() + initialX
+                            let newY = event.getRawY() + initialY
+
+                            let displayMetrics = activity.getResources().getDisplayMetrics()
+                            let screenWidth = displayMetrics.widthPixels.value
+                            let screenHeight = displayMetrics.heightPixels.value
+
+                            let viewWidth = view.getWidth()
+                            let viewHeight = view.getHeight()
+
+                            if (newX < 0) newX = 0
+                            if (newX + viewWidth > screenWidth) newX = screenWidth - viewWidth
+
+                            if (newY < 0) newY = 0
+                            if (newY + viewHeight > screenHeight) newY = screenHeight - viewHeight
+
+                            view.setX(newX)
+                            view.setY(newY)
+
                             let deltaTime = Date.now() - initialTouchTime
                             if (deltaTime > 200) isMove = true
                             break
@@ -641,9 +657,9 @@ Java.perform(async function () {
         menu.createMenuBarTitle("DanFunc", "#FFC107")
         menu.createMenuOptionsLayout()
 
-        menu.addOption("opt1", "Btn1", () => {})
+        menu.addOption("opt1", "Btn1", {on: () => console.log('Btn1 is on'), off: () => console.log('Btn1 is off')})
 
-        menu.addSeekBar(1,"Value:",0, 0, 23, () => {})
+        menu.addSeekBar(1,"Value:",0, 0, 23, (value, event) => console.log("SeekBar1, Value: " + value + ", Event: " + event));
 
         let radioGroup = menu.createRadioGroup();
 
@@ -654,10 +670,10 @@ Java.perform(async function () {
 
         let text1 = menu.addText("Hi!", 15, "#75757B")
 
-        menu.addButton("opt2", "Tap! Tap!", {onClick: () => {menu.changeText(text1, "Bye!")}}, 0, 100)
+        menu.addButton("opt2", "Tap! Tap!", { onClick: () => { menu.changeText(text1, "Bye!"); console.log("Tap! Tap! is clicked")}}, 0, 100)
 
         menu.addTextInput("userInput", "Enter your text here", {
-            onTextChanged: (s, start, before, count) => console.log("Text changed: " + s.toString()),
+            onTextChanged: (s, start, before, count) => console.log("Text changed: " + s.toString() + " start: " + start + " before: " + before + " count: " + count),
         });
 
         menu.addToggle(1, "Toggle", false, {
@@ -672,6 +688,9 @@ Java.perform(async function () {
         menu.addDropdown("myDropdown", options, initialSelection, {
             onItemSelected: (position) => {
                 console.log("Selected option: " + options[position]);
+            },
+            onNothingSelected: () => {
+                console.log("No option selected");
             }
         });
 
